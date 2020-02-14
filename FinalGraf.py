@@ -127,7 +127,7 @@ class Graph(tk.Frame):
         ]
 
         self.Points = [
-            myMatrix.Vector3D(1.0, 6,6),
+            myMatrix.Vector3D(1.0, 1,1),
         ]
         # Steny kociek s cislami vrcholov
         self.CubeFaces = [
@@ -154,7 +154,7 @@ class Graph(tk.Frame):
         self.Scale[(1, 1)] = scaleY
         self.Scale[(2, 2)] = scaleZ
 
-        self.InnerTranslation = [2.3, 0, 0]
+        self.InnerTranslation = [0, 0, 0]
 
         self.tmpZobrazujeSa = False
 
