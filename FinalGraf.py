@@ -164,7 +164,6 @@ class Graph(tk.Frame):
         self.Scale[(0, 0)] = scaleX
         self.Scale[(1, 1)] = scaleY
         self.Scale[(2, 2)] = scaleZ
-
         self.tmpZobrazujeSa = False
 
         self.Tsf = myMatrix.Matrix(4, 4)
