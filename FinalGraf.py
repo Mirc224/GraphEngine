@@ -22,9 +22,6 @@ class Graph(tk.Frame):
         self.Graph.pack()
         self.pack()
 
-
-        self.Show = [0, 0, 0]
-        self.LabelCords = []
         # Axes of graph in the middle
         self.CordsSys = [
             myMatrix.Vector3D(0.0, 0.0, 0.0),  # Origin
@@ -110,7 +107,7 @@ class Graph(tk.Frame):
             myMatrix.Vector3D(0.0, -1.0, 0.0),
         ]
 
-        self.dotz = myMatrix.Vector3D(1, 0, 0)
+        #self.dotz = myMatrix.Vector3D(1, 0, 0)
 
         self.Points = [
             myMatrix.Vector3D(5, -1.0, 1.0),
@@ -126,9 +123,6 @@ class Graph(tk.Frame):
             myMatrix.Vector3D(-5, -1.0, 1.0),
         ]
 
-        self.Points = [
-            myMatrix.Vector3D(1.0, 6,6),
-        ]
         # Steny kociek s cislami vrcholov
         self.CubeFaces = [
             [0, 1, 2, 3],
@@ -139,8 +133,25 @@ class Graph(tk.Frame):
             [3, 2, 6, 7]
         ]
 
+        self.Points = [
+            myMatrix.Vector3D(1.0, 20, 2),
+        ]
+
+        self.Show = [0, 0, 0]
+        self.LabelCords = []
+
         # Uhly ktore sa pouzivaju pri rotaciach
-        self.Angles = [0.0, 0.0, 0.0]
+
+        self.RotationMatX = myMatrix.Matrix(4, 4)
+
+        self.RotationMatY = myMatrix.Matrix(4, 4)
+
+        self.RotationMatZ = myMatrix.Matrix(4, 4)
+
+        self.Rot = myMatrix.Matrix(4, 4)
+
+        self.Angles = [15.0, 45.0, 0.0]
+        self.rotationUpdate()
 
         # Translation matrix, na posun kamery
         self.TranslationCam = [0.0, 0.0, 0.0]
@@ -154,30 +165,31 @@ class Graph(tk.Frame):
         self.Scale[(1, 1)] = scaleY
         self.Scale[(2, 2)] = scaleZ
 
-        self.InnerTranslation = [2.3, 0, 0]
-
         self.tmpZobrazujeSa = False
-
-        self.RotationMatX = myMatrix.Matrix(4, 4)
-
-        self.RotationMatY = myMatrix.Matrix(4, 4)
-
-        self.RotationMatZ = myMatrix.Matrix(4, 4)
-
-        self.Rot = myMatrix.Matrix(4, 4)
 
         self.Tsf = myMatrix.Matrix(4, 4)
 
-        #self.Tr = myMatrix.Matrix(4, 4)
-        #self.Tr[(0, 3)] = 2
+        # self.Tr = myMatrix.Matrix(4, 4)
+        # self.Tr[(0, 3)] = 2
+
+        self.InnerTranslation = [0, 0, 0]
 
         self.InnerTsf = myMatrix.Matrix(4, 4)
         self.InnerTsf[(0, 0)] = 1
-        self.InnerTsf[(1, 1)] = 1
+        self.InnerTsf[(1, 1)] = 0.1
         self.InnerTsf[(2, 2)] = 1
         self.InnerTsf[(0, 3)] = self.InnerTranslation[0]
         self.InnerTsf[(1, 3)] = self.InnerTranslation[1]
         self.InnerTsf[(2, 3)] = self.InnerTranslation[2]
+
+        self.BaseScaledNumber = []
+        self.OutterStartPosition = [0, 0, 0]
+        for i in range(3):
+            self.BaseScaledNumber.append([])
+            lastNum = -0.8
+            for j in range(9):
+                self.BaseScaledNumber[i].append(round(lastNum - self.OutterStartPosition[i] * 0.8, 2) / self.InnerTsf[i, i])
+                lastNum += 0.2
 
         self.Projection = myMatrix.Matrix(4, 4)
 
@@ -204,18 +216,38 @@ class Graph(tk.Frame):
         self.Graph.bind("<B3-Motion>", self.dragcallbackRight)
         self.Graph.bind("<ButtonRelease-3>", self.releasecallbackRight)
 
+        # self.Graph.bind_all("<d>", self.move)
         self.LabelAngle = [0.0, 0.0, 0.0]
         self.Odtien = 0
         self.cnt = Graph.RATE
         self.cntRight = Graph.RATE
         self.prevmouseX = 0.0
         self.prevmouseY = 0.0
-        self.previousTmpScale = 1
+        self.previousTmpScale = [self.InnerTsf[0, 0], self.InnerTsf[1, 1], self.InnerTsf[2, 2]]
         self.prevmouseYright = 0.0
-        self.ScaleFactor = 1.01
+        self.ScaleFactor = 1.02
+
+        for i in range(3):
+            self.updateAxisNumberPositions(i, 1)
 
         self.numerifyAxis()
         self.outterTransformationMatrixUpdate()
+
+    def updateAxisNumberPositions(self, dim, koeficient, nasobenie=True):
+        if nasobenie:
+            for i in range(len(self.BaseScaledNumber[dim])):
+                self.BaseScaledNumber[dim][i] *= koeficient
+                self.AxisNumbersPosition[dim][i][0].values[dim] = self.BaseScaledNumber[dim][i] + self.InnerTsf[(dim, 3)]
+                self.AxisNumbersPosition[dim][i][1].values[dim] = self.BaseScaledNumber[dim][i] + self.InnerTsf[(dim, 3)]
+        else:
+            for i in range(len(self.BaseScaledNumber[dim])):
+                self.BaseScaledNumber[dim][i] /= koeficient
+                self.AxisNumbersPosition[dim][i][0].values[dim] = self.BaseScaledNumber[dim][i] + self.InnerTsf[(dim, 3)]
+                self.AxisNumbersPosition[dim][i][1].values[dim] = self.BaseScaledNumber[dim][i] + self.InnerTsf[(dim, 3)]
+
+    def move(self, event):
+        self.InnerTranslation[0] += 1
+        self.innerTransformationMatrixUpdate()
 
     def drawGraphCubeWall(self):
         self.Show = [0, 0, 0]
@@ -252,15 +284,8 @@ class Graph(tk.Frame):
             poly = []
             for peak in range(len(self.CubeFaces[faceNumber])):
                 peakPositionVector = self.GraphCube[self.CubeFaces[faceNumber][peak]]
-
-                # Transformacia bodu
-                transformedPointVector = self.Tsf * peakPositionVector
-
-                # Projekcia bodu
-                projectedPointVector = self.Projection * transformedPointVector
-
                 # Vlozenie bodu obrazovky do listu transformovanych vrcholov
-                screenProjectionCords = self.toScreenCords(projectedPointVector)
+                screenProjectionCords = self.outterPointToScreen(peakPositionVector)
                 x = int(screenProjectionCords.values[0])
                 y = int(screenProjectionCords.values[1])
                 poly.append((x, y))
@@ -280,6 +305,7 @@ class Graph(tk.Frame):
     def drawGraphCubeAxis(self):
         labels = ['Label X', 'Label Y', 'Label Z']
         self.LabelCords = []
+        lineAndLabelCords = []
         for axeFace in range(3):
             edgeNodeVector0 = self.GraphCube[self.AxisEdges[axeFace][self.Show[axeFace]][0]]
             edgeNodeVector1 = self.GraphCube[self.AxisEdges[axeFace][self.Show[axeFace]][1]]
@@ -344,149 +370,166 @@ class Graph(tk.Frame):
                         self.LabelCords.append(myMatrix.Vector3D(-distance, distance, distance))
                     self.LabelCords[axeFace].values[axeFace] = 0
 
-            tsfLabelPosistionVector = self.Tsf * self.LabelCords[axeFace]
-            projectedPointVector = self.Projection * tsfLabelPosistionVector
+            self.drawGraphAxisNumberAndLines(axeFace)
+            screenProjectionCords = self.outterPointToScreen(self.LabelCords[axeFace])
+            lineAndLabelCords.append([screenProjectionCords0, screenProjectionCords1, screenProjectionCords])
 
-            screenProjectionCords = self.toScreenCords(projectedPointVector)
-            self.Graph.create_line(screenProjectionCords0.values[0], screenProjectionCords0.values[1],
-                                   screenProjectionCords1.values[0], screenProjectionCords1.values[1], fill='black')
-            self.Graph.create_text(screenProjectionCords.values[0], screenProjectionCords.values[1], fill='black',
-                                   text=labels[axeFace],
-                                   angle=self.LabelAngle[axeFace])
+        # aby neboli prekryte osy sivymi ciarami
+        for i in range(3):
+            self.Graph.create_line(lineAndLabelCords[i][0].values[0], lineAndLabelCords[i][0].values[1],
+                                   lineAndLabelCords[i][1].values[0], lineAndLabelCords[i][1].values[1], fill='black')
+            self.Graph.create_text(lineAndLabelCords[i][2].values[0], lineAndLabelCords[i][2].values[1], fill='black',
+                                   text=labels[i],
+                                   angle=self.LabelAngle[i])
 
-    def drawGraphAxisNumberAndLines(self):
+    def drawGraphAxisNumberAndLines(self, axeFace):
         nlLength = 0.03
-        for axeFace in range(3):
-            changeVector0 = myMatrix.Vector3D(1, 1, 1, 1)
-            changeVector1 = myMatrix.Vector3D(1, 1, 1, 1)
-            if self.Show[axeFace] < 2:
-                if self.Show[axeFace] > 0:
-                    if axeFace == 0:
-                        changeVector0.values[2] = -1
-                        changeVector1.values[2] = -1
-                    elif axeFace == 1:
-                        changeVector0.values[2] = -1
-                        changeVector1.values[2] = -1
-                    elif axeFace == 2:
-                        changeVector0.values[0] = -1
-                        changeVector1.values[0] = -1
+        changeVector0 = myMatrix.Vector3D(1, 1, 1, 1)
+        changeVector1 = myMatrix.Vector3D(1, 1, 1, 1)
+        if self.Show[axeFace] < 2:
+            if self.Show[axeFace] > 0:
+                if axeFace == 0:
+                    changeVector0.values[2] = -1
+                    changeVector1.values[2] = -1
+                elif axeFace == 1:
+                    changeVector0.values[2] = -1
+                    changeVector1.values[2] = -1
+                elif axeFace == 2:
+                    changeVector0.values[0] = -1
+                    changeVector1.values[0] = -1
+        else:
+            if self.Show[axeFace] < 3:
+                if axeFace == 0:
+                    changeVector0.values[1] = -1
+                    changeVector1.values[1] = -1
+                elif axeFace == 1:
+                    changeVector0.values[0] = -1
+                    changeVector1.values[0] = -1
+                elif axeFace == 2:
+                    changeVector0.values[1] = -1
+                    changeVector1.values[1] = -1
             else:
-                if self.Show[axeFace] < 3:
-                    if axeFace == 0:
-                        changeVector0.values[1] = -1
-                        changeVector1.values[1] = -1
-                    elif axeFace == 1:
-                        changeVector0.values[0] = -1
-                        changeVector1.values[0] = -1
-                    elif axeFace == 2:
-                        changeVector0.values[1] = -1
-                        changeVector1.values[1] = -1
-                else:
-                    if axeFace == 0:
-                        changeVector0.values[1] = -1
-                        changeVector0.values[2] = -1
-                        changeVector1.values[1] = -1
-                        changeVector1.values[2] = -1
-                    elif axeFace == 1:
-                        changeVector0.values[0] = -1
-                        changeVector0.values[2] = -1
-                        changeVector1.values[0] = -1
-                        changeVector1.values[2] = -1
-                    elif axeFace == 2:
-                        changeVector0.values[0] = -1
-                        changeVector0.values[1] = -1
-                        changeVector1.values[0] = -1
-                        changeVector1.values[1] = -1
-            for perpenLinePointsVectorTuple in self.AxisNumbersPosition[axeFace]:
-                lineStartPointVector = perpenLinePointsVectorTuple[0] * changeVector0
-                if axeFace == 1:
-                    pass
-                    #print('Vector: {}    scale*1:  {}   rozdiel:   {}'.format(lineStartPointVector.values[1], 1 * self.InnerTsf[(axeFace, axeFace)],math.fabs(lineStartPointVector.values[1]) - 1 * self.InnerTsf[(axeFace, axeFace)]))
-                    #print(lineStartPointVector[axeFace] + self.InnerTsf[(axeFace, 3)])
-                lineStartPointVector.values[axeFace] *= self.InnerTsf[(axeFace, axeFace)]
-                if not (math.fabs(lineStartPointVector.values[0]) - 1 <= 0.000001) or not (
-                        math.fabs(lineStartPointVector.values[1]) - 1 <= 0.000001) or not (
-                        math.fabs(lineStartPointVector.values[2]) - 1 <= 0.000001):
-                    continue
-                tsfStartPointVector = self.Tsf * lineStartPointVector
+                if axeFace == 0:
+                    changeVector0.values[1] = -1
+                    changeVector0.values[2] = -1
+                    changeVector1.values[1] = -1
+                    changeVector1.values[2] = -1
+                elif axeFace == 1:
+                    changeVector0.values[0] = -1
+                    changeVector0.values[2] = -1
+                    changeVector1.values[0] = -1
+                    changeVector1.values[2] = -1
+                elif axeFace == 2:
+                    changeVector0.values[0] = -1
+                    changeVector0.values[1] = -1
+                    changeVector1.values[0] = -1
+                    changeVector1.values[1] = -1
+        for perpenLinePointsVectorTuple in self.AxisNumbersPosition[axeFace]:
+            lineStartPointVector = perpenLinePointsVectorTuple[0] * changeVector0
+            lineStartPointVector = self.innerCordsToOutter(lineStartPointVector, axeFace)
+            if not (math.fabs(lineStartPointVector.values[0]) - 1 <= 0.000001) or not (
+                    math.fabs(lineStartPointVector.values[1]) - 1 <= 0.000001) or not (
+                    math.fabs(lineStartPointVector.values[2]) - 1 <= 0.000001):
+                continue
+            tsfStartPointVector = self.Tsf * lineStartPointVector
 
-                projectedStartPointVector = self.Projection * tsfStartPointVector
-                startPointScreenProjectionCords = self.toScreenCords(projectedStartPointVector)
+            projectedStartPointVector = self.Projection * tsfStartPointVector
+            startPointScreenProjectionCords = self.toScreenCords(projectedStartPointVector)
 
-                # druhy bod dlhej ciary
-                lineEndPointVector = perpenLinePointsVectorTuple[1] * changeVector1
-                lineEndPointVector.values[axeFace] *= self.InnerTsf[(axeFace, axeFace)]
-                tsfEndPointVector = self.Tsf * lineEndPointVector
-                projectedEndPointVector = self.Projection * tsfEndPointVector
-                endPointScreenProjectionCords = self.toScreenCords(projectedEndPointVector)
-                # vykreslenie dlhej ciary
-                self.Graph.create_line(startPointScreenProjectionCords[0], startPointScreenProjectionCords[1],
-                                       endPointScreenProjectionCords[0], endPointScreenProjectionCords[1], fill='gray')
+            # druhy bod dlhej ciary
+            lineEndPointVector = perpenLinePointsVectorTuple[1] * changeVector1
+            lineEndPointVector = self.innerCordsToOutter(lineEndPointVector, axeFace)
+            endPointScreenProjectionCords = self.outterPointToScreen(lineEndPointVector)
+            # vykreslenie dlhej ciary
+            self.Graph.create_line(startPointScreenProjectionCords[0], startPointScreenProjectionCords[1],
+                                   endPointScreenProjectionCords[0], endPointScreenProjectionCords[1], fill='gray')
 
-                # kolma ciara
-                perpendicularEndPointVector = perpenLinePointsVectorTuple[1] * changeVector1
-                perpendicularEndPointVector.values[(axeFace + 1) % 2] *= -1
-                perpendicularEndPointVector.values[axeFace] *= self.InnerTsf[(axeFace, axeFace)]
-                tsfPerpendicularEndPointVector = self.Tsf * perpendicularEndPointVector
-                projectedPerpendicularEndPointVector = self.Projection * tsfPerpendicularEndPointVector
-                perpendicularEndPointScreenProjectionCords = self.toScreenCords(projectedPerpendicularEndPointVector)
-                self.Graph.create_line(endPointScreenProjectionCords[0], endPointScreenProjectionCords[1],
-                                       perpendicularEndPointScreenProjectionCords[0],
-                                       perpendicularEndPointScreenProjectionCords[1], fill='gray')
+            # kolma ciara
+            perpendicularEndPointVector = perpenLinePointsVectorTuple[1] * changeVector1
+            perpendicularEndPointVector.values[(axeFace + 1) % 2] *= -1
 
-                # ciarka na ciselenj osy
-                axeMarkStartPointVector = perpenLinePointsVectorTuple[0] * changeVector0
-                axeMarkStartPointVector.values[axeFace] = self.InnerTsf[(axeFace, axeFace)] * \
-                                                          axeMarkStartPointVector.values[axeFace]
-                if axeFace != 2:
-                    axeMarkStartPointVector.values[2] = perpenLinePointsVectorTuple[0][2] * changeVector0[2] + nlLength
-                else:
-                    axeMarkStartPointVector.values[0] = perpenLinePointsVectorTuple[0][0] * changeVector0[0] + nlLength
-                tsfAxeMarkStartPointVector = self.Tsf * axeMarkStartPointVector
-                projectedAxeMarkStartPointVector = self.Projection * tsfAxeMarkStartPointVector
-                axeMarkStartPointScreenProjectionCords = self.toScreenCords(projectedAxeMarkStartPointVector)
+            perpendicularEndPointVector = self.innerCordsToOutter(perpendicularEndPointVector, axeFace)
+            perpendicularEndPointScreenProjectionCords = self.outterPointToScreen(perpendicularEndPointVector)
+            self.Graph.create_line(endPointScreenProjectionCords[0], endPointScreenProjectionCords[1],
+                                   perpendicularEndPointScreenProjectionCords[0],
+                                   perpendicularEndPointScreenProjectionCords[1], fill='gray')
 
-                axeMarkEndPointVector = perpenLinePointsVectorTuple[0] * changeVector0
-                axeMarkEndPointVector.values[axeFace] = self.InnerTsf[(axeFace, axeFace)] * \
-                                                        axeMarkEndPointVector.values[axeFace]
-                if axeFace != 2:
-                    axeMarkEndPointVector.values[2] = perpenLinePointsVectorTuple[0][2] * changeVector0[2] - nlLength
-                else:
-                    axeMarkEndPointVector.values[0] = perpenLinePointsVectorTuple[0][0] * changeVector0[0] - nlLength
-                tsfAxeMarkEndPointVector = self.Tsf * axeMarkEndPointVector
-                projectedAxeMarkEndPointVector = self.Projection * tsfAxeMarkEndPointVector
-                axeMarkEndPointScreenProjectionCords = self.toScreenCords(projectedAxeMarkEndPointVector)
+            # ciarka na ciselenj osy
+            axeMarkStartPointVector = perpenLinePointsVectorTuple[0] * changeVector0
+            axeMarkStartPointVector = self.innerCordsToOutter(axeMarkStartPointVector, axeFace)
+            if axeFace != 2:
+                axeMarkStartPointVector.values[2] = perpenLinePointsVectorTuple[0][2] * changeVector0[2] + nlLength
+            else:
+                axeMarkStartPointVector.values[0] = perpenLinePointsVectorTuple[0][0] * changeVector0[0] + nlLength
 
-                self.Graph.create_line(axeMarkStartPointScreenProjectionCords[0],
-                                       axeMarkStartPointScreenProjectionCords[1],
-                                       axeMarkEndPointScreenProjectionCords[0], axeMarkEndPointScreenProjectionCords[1],
-                                       fill='black')
+            axeMarkStartPointScreenProjectionCords = self.outterPointToScreen(axeMarkStartPointVector)
 
-                numberPositionVector = perpenLinePointsVectorTuple[0] * changeVector0
-                numberPositionVector.values[axeFace] = self.InnerTsf[(axeFace, axeFace)] * numberPositionVector.values[
-                    axeFace]
-                for cord in range(3):
-                    if cord != axeFace:
-                        if self.LabelCords[axeFace].values[cord] < 0:
-                            numberPositionVector.values[cord] = self.LabelCords[axeFace].values[cord] + (
-                                        math.fabs(self.LabelCords[axeFace].values[cord]) - 1) / 2
-                        else:
-                            numberPositionVector.values[cord] = self.LabelCords[axeFace].values[cord] - (
-                                        math.fabs(self.LabelCords[axeFace].values[cord]) - 1) / 2
+            # dalsi bod
+            axeMarkEndPointVector = perpenLinePointsVectorTuple[0] * changeVector0
+            axeMarkEndPointVector = self.innerCordsToOutter(axeMarkEndPointVector, axeFace)
+            if axeFace != 2:
+                axeMarkEndPointVector.values[2] = perpenLinePointsVectorTuple[0][2] * changeVector0[2] - nlLength
+            else:
+                axeMarkEndPointVector.values[0] = perpenLinePointsVectorTuple[0][0] * changeVector0[0] - nlLength
 
-                tsfNumberPositionVector = self.Tsf * numberPositionVector
-                projectedNumberPositionVector = self.Projection * tsfNumberPositionVector
-                numberPositionScreenProjectionCords = self.toScreenCords(projectedNumberPositionVector)
-                self.Graph.create_text(numberPositionScreenProjectionCords[0], numberPositionScreenProjectionCords[1],
-                                       text=round(
-                                           perpenLinePointsVectorTuple[0].values[axeFace] + self.InnerTranslation[
-                                               axeFace], 3))
+            axeMarkEndPointScreenProjectionCords = self.outterPointToScreen(axeMarkEndPointVector)
+
+            self.Graph.create_line(axeMarkStartPointScreenProjectionCords[0],
+                                   axeMarkStartPointScreenProjectionCords[1],
+                                   axeMarkEndPointScreenProjectionCords[0], axeMarkEndPointScreenProjectionCords[1],
+                                   fill='black')
+
+            numberPositionVector = perpenLinePointsVectorTuple[0] * changeVector0
+            numberPositionVector = self.innerCordsToOutter(numberPositionVector, axeFace)
+            for cord in range(3):
+                if cord != axeFace:
+                    if self.LabelCords[axeFace].values[cord] < 0:
+                        numberPositionVector.values[cord] = self.LabelCords[axeFace].values[cord] + (
+                                math.fabs(self.LabelCords[axeFace].values[cord]) - 1) / 2
+                    else:
+                        numberPositionVector.values[cord] = self.LabelCords[axeFace].values[cord] - (
+                                math.fabs(self.LabelCords[axeFace].values[cord]) - 1) / 2
+
+            numberPositionScreenProjectionCords = self.outterPointToScreen(numberPositionVector)
+            self.Graph.create_text(numberPositionScreenProjectionCords[0], numberPositionScreenProjectionCords[1],
+                                   text=round(
+                                       perpenLinePointsVectorTuple[0].values[axeFace], 3))
+
+    def innerCordsToOutter(self, p, axe=-1):
+        if axe < 0:
+            r = myMatrix.Vector3D()
+            for i in range(3):
+                r.values[i] = (p[i] - self.InnerTsf[(i, 3)]) * self.InnerTsf[(i, i)]
+                r.values[i] += self.OutterStartPosition[i]
+            return r
+        else:
+            p.values[axe] = (p.values[axe] - self.InnerTsf[axe, 3]) * self.InnerTsf[(axe, axe)]
+            p.values[axe] += self.OutterStartPosition[axe]
+            return p
+
+    def outterPointToScreen(self, outterPoint):
+        # Transformacia bodu
+        transformedPointVector = self.Tsf * outterPoint
+
+        # Projekcia bodu
+        projectedPointVector = self.Projection * transformedPointVector
+
+        return self.toScreenCords(projectedPointVector)
+
+    def toScreenCords(self, pv):
+        # px = min(((pv[0] + 1) * 0.5 * Graph.WIDTH), Graph.WIDTH - 1)
+        px = ((pv[0] + 1) * 0.5 * Graph.WIDTH)
+
+        # py = min(((1 - (pv[1] + 1) * 0.5) * Graph.WIDTH), Graph.HEIGHT - 1)
+        py = ((1 - (pv[1] + 1) * 0.5) * Graph.WIDTH)
+
+        return myMatrix.Vector3D(int(px), int(py), 1)
+
 
     def MakeGraphCube(self):
         self.drawGraphCubeWall()
         self.drawGraphCubeAxis()
-        self.drawGraphAxisNumberAndLines()
-            #print(poziciaMinusJednaHodnota)
+        # print(poziciaMinusJednaHodnota)
 
 
     def ChangeColor(self, event):
@@ -499,6 +542,7 @@ class Graph(tk.Frame):
             if self.Odtien < 0:
                 self.Odtien = 0
         self.update()
+
 
     def Move(self, event):
         if event.char == 'a':
@@ -515,16 +559,6 @@ class Graph(tk.Frame):
             self.InnerTranslation[1] -= 0.1
         self.update()
 
-
-    def toScreenCords(self, pv):
-        #px = min(((pv[0] + 1) * 0.5 * Graph.WIDTH), Graph.WIDTH - 1)
-        px = ((pv[0] + 1) * 0.5 * Graph.WIDTH)
-
-        #py = min(((1 - (pv[1] + 1) * 0.5) * Graph.WIDTH), Graph.HEIGHT - 1)
-        py = ((1 - (pv[1] + 1) * 0.5) * Graph.WIDTH)
-
-        return myMatrix.Vector3D(int(px), int(py), 1)
-
     def update(self):
         self.Graph.delete('all')
 
@@ -534,16 +568,13 @@ class Graph(tk.Frame):
         tvs = []
 
         for v in self.CordsSys:
-            r = self.InnerTsf * v
-            r = self.Tsf * r
-            ps = self.Projection * r
-            tvs.append(self.toScreenCords(ps))
+            tvs.append(self.outterPointToScreen(self.innerCordsToOutter(v)))
 
         # Vykreslenie osy
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[1].values[0], tvs[1].values[1], fill='red')
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[2].values[0], tvs[2].values[1], fill='green')
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[3].values[0], tvs[3].values[1], fill='blue')
-
+        '''
         r = self.InnerTsf * self.dotz
 
         if (math.fabs(r.values[0]) - 1 <= 0.000001) and (math.fabs(r.values[1]) - 1 <= 0.000001) and (
@@ -553,18 +584,14 @@ class Graph(tk.Frame):
             ps = self.Projection * r
             tmp = self.toScreenCords(ps)
             self.Graph.create_oval(tmp[0] - 5, tmp[1] - 5, tmp[0] + 5, tmp[1] + 5, fill=farba, outline='red')
-
+        '''
         for p in self.Points:
-            r = myMatrix.Vector3D()
-            for i in range(3):
-                r.values[i] = (p[i] - self.InnerTsf[(i, 3)]) * self.InnerTsf[(i, i)]
-            if (math.fabs(r.values[0]) - 1 <= 0.000001) and (math.fabs(r.values[1]) - 1 <= 0.000001) and (math.fabs(r.values[2]) - 1 <= 0.000001):
+            r = self.innerCordsToOutter(p)
+            if (math.fabs(r.values[0]) - 1 <= 0.000001) and (math.fabs(r.values[1]) - 1 <= 0.000001) and (
+                    math.fabs(r.values[2]) - 1 <= 0.000001):
                 farba = '#ff{}{}'.format('{:02x}'.format(self.Odtien), '{:02x}'.format(self.Odtien))
-                r = self.Tsf * r
-                ps = self.Projection * r
-                tmp = self.toScreenCords(ps)
+                tmp = self.outterPointToScreen(r)
                 self.Graph.create_oval(tmp[0] - 5, tmp[1] - 5, tmp[0] + 5, tmp[1] + 5, fill='black')
-
 
     def rotationUpdate(self):
         self.RotationMatX[(1, 1)] = math.cos(math.radians(self.Angles[0]))
@@ -582,7 +609,6 @@ class Graph(tk.Frame):
         self.RotationMatZ[(1, 0)] = math.sin(math.radians(self.Angles[2]))
         self.RotationMatZ[(1, 1)] = math.cos(math.radians(self.Angles[2]))
 
-        self.outterTransformationMatrixUpdate()
 
     def outterTransformationMatrixUpdate(self):
         self.Rot = self.RotationMatX * self.RotationMatY * self.RotationMatZ
@@ -595,6 +621,7 @@ class Graph(tk.Frame):
         # self.Tsf = self.Scale * self.Rot * self.Tr
         self.Tsf = self.Scale * self.Rot
         self.update()
+
 
     def dragcallback(self, event):
         self.cnt -= 1
@@ -623,14 +650,17 @@ class Graph(tk.Frame):
                     self.Angles[2] += 360.0
 
             self.rotationUpdate()
+            self.outterTransformationMatrixUpdate()
 
         self.prevmouseX = event.x
         self.prevmouseY = event.y
+
 
     def releasecallback(self, event):
         self.cnt = Graph.RATE
         self.prevmouseX = 0.0
         self.prevmouseY = 0.0
+
 
     def innerTransformationMatrixUpdate(self):
         self.InnerTsf[(0, 3)] = self.InnerTranslation[0]
@@ -638,9 +668,9 @@ class Graph(tk.Frame):
         self.InnerTsf[(2, 3)] = self.InnerTranslation[2]
         self.update()
 
+
     def dragcallbackRight(self, event):
         diffY = event.y - self.prevmouseYright
-        tmpScale = self.InnerTsf[(0, 0)]
         if diffY < 0 and diffY != 0:
             self.InnerTsf[(0, 0)] /= self.ScaleFactor
             self.InnerTsf[(1, 1)] /= self.ScaleFactor
@@ -651,49 +681,43 @@ class Graph(tk.Frame):
             self.InnerTsf[(1, 1)] *= self.ScaleFactor
             self.InnerTsf[(2, 2)] *= self.ScaleFactor
 
-        #print(math.fabs(tmpScale * self.AxisNumbersPosition[0][0][0].values[0] - tmpScale * self.AxisNumbersPosition[0][1][0].values[0]))
+        # print(math.fabs(tmpScale * self.AxisNumbersPosition[0][0][0].values[0] - tmpScale * self.AxisNumbersPosition[0][1][0].values[0]))
         self.numerifyAxis()
         self.innerTransformationMatrixUpdate()
 
         self.prevmouseYright = event.y
 
+
     def releasecallbackRight(self, event):
         self.prevmouseYright = 0.0
 
+
     def numerifyAxis(self):
-        #print(-1 / tmpScale + self.InnerTranslation[0],'    ' , 1 / tmpScale + self.InnerTranslation[0])
-        tmpScale = self.InnerTsf[(0, 0)]
-        if -1 / tmpScale + self.InnerTranslation[0] < 0 and 1 / tmpScale + self.InnerTranslation[0] > 0:
-            #print('0 sa zobrazuje')
-            #print(self.InnerTranslation[0] * tmpScale)
-            self.tmpZobrazujeSa = True
-        rozdiel = math.fabs(tmpScale * (self.AxisNumbersPosition[0][0][0].values[0] - self.AxisNumbersPosition[0][1][0].values[0]))
-        if rozdiel < 0.2:
-            nasobok = 1
-            if self.previousTmpScale / tmpScale <= 1:
-                nasobok *= 2
-            else:
-                nasobok *= 1.25
-                self.previousTmpScale /= 10
-                if self.previousTmpScale > 10:
-                    self.previousTmpScale = round(self.previousTmpScale)
-            for i in range(3):
-                for v in self.AxisNumbersPosition[i]:
-                    v[0].values[i] *= nasobok
-                    v[1].values[i] *= nasobok
-        elif rozdiel > 0.4:
-            nasobok = 1
-            if self.previousTmpScale / tmpScale >= 0.1:
-                nasobok *= 2
-            else:
-                nasobok *= 1.25
-                self.previousTmpScale *= 10
-                if self.previousTmpScale > 1:
-                    self.previousTmpScale = round(self.previousTmpScale)
-            for i in range(3):
-                for v in self.AxisNumbersPosition[i]:
-                    v[0].values[i] /= nasobok
-                    v[1].values[i] /= nasobok
+        for dim in range(3):
+            tmpScale = self.InnerTsf[(dim, dim)]
+            rozdiel = math.fabs(tmpScale * (
+                        self.AxisNumbersPosition[dim][0][0].values[dim] - self.AxisNumbersPosition[dim][1][0].values[dim]))
+            if rozdiel < 0.2:
+                nasobok = 1
+                if self.previousTmpScale[dim] / tmpScale <= 1:
+                    nasobok *= 2
+                else:
+                    nasobok *= 1.25
+                    self.previousTmpScale[dim] /= 10
+                    if self.previousTmpScale[dim] > 10:
+                        self.previousTmpScale[dim] = round(self.previousTmpScale[dim])
+                self.updateAxisNumberPositions(dim, nasobok)
+            elif rozdiel > 0.4:
+                nasobok = 1
+                if self.previousTmpScale[dim] / tmpScale >= 0.1:
+                    nasobok *= 2
+                else:
+                    nasobok *= 1.25
+                    self.previousTmpScale[dim] *= 10
+                    if self.previousTmpScale[dim] > 1:
+                        self.previousTmpScale[dim] = round(self.previousTmpScale[dim])
+                self.updateAxisNumberPositions(dim, nasobok, nasobenie=False)
+
 
 vector = myMatrix.Vector(1, 2, 3)
 window = tk.Tk()
