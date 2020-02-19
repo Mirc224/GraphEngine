@@ -1,7 +1,7 @@
 import math
 import tkinter as tk
 import myMatrix
-import copy
+import heapq
 
 
 class Graph(tk.Frame):
@@ -21,7 +21,8 @@ class Graph(tk.Frame):
         self.Graph = tk.Canvas(self, width=Graph.WIDTH, height=Graph.HEIGHT, bg='white')
         self.Graph.pack()
         self.pack()
-
+        self.Parent = parent
+        self.Images = []
         # Axes of graph in the middle
         self.CordsSys = [
             myMatrix.Vector3D(0.0, 0.0, 0.0),  # Origin
@@ -123,6 +124,31 @@ class Graph(tk.Frame):
             myMatrix.Vector3D(-5, -1.0, 1.0),
         ]
 
+        self.PolyGonePeaks = [
+            myMatrix.Vector3D(0, 0, 0),
+            myMatrix.Vector3D(0, 1, 0),
+            myMatrix.Vector3D(-2, 1, 0),
+            myMatrix.Vector3D(-1, 0, 0),
+            myMatrix.Vector3D(-1, 0, -1),
+            myMatrix.Vector3D(-1, 2, -1),
+            myMatrix.Vector3D(0, 1, -1),
+            myMatrix.Vector3D(0, 0, -1),
+        ]
+
+        self.PoygonEdges = [
+            [0, 3],
+            [0, 1],
+            [0, 7],
+            [1, 2],
+            [3, 2],
+            [3, 4],
+            [4, 5],
+            [4, 7],
+            [5, 6],
+            [5, 2],
+            [6, 7],
+            [6, 1],
+        ]
         # Steny kociek s cislami vrcholov
         self.CubeFaces = [
             [0, 1, 2, 3],
@@ -133,9 +159,9 @@ class Graph(tk.Frame):
             [3, 2, 6, 7]
         ]
 
-        self.Points = [
-            myMatrix.Vector3D(1.0, 20, 2),
-        ]
+        #self.Points = [
+         #   myMatrix.Vector3D(1.0, 1, 1),
+        #]
 
         self.Show = [0, 0, 0]
         self.LabelCords = []
@@ -175,7 +201,7 @@ class Graph(tk.Frame):
 
         self.InnerTsf = myMatrix.Matrix(4, 4)
         self.InnerTsf[(0, 0)] = 1
-        self.InnerTsf[(1, 1)] = 0.1
+        self.InnerTsf[(1, 1)] = 1
         self.InnerTsf[(2, 2)] = 1
         self.InnerTsf[(0, 3)] = self.InnerTranslation[0]
         self.InnerTsf[(1, 3)] = self.InnerTranslation[1]
@@ -216,6 +242,8 @@ class Graph(tk.Frame):
         self.Graph.bind("<ButtonRelease-3>", self.releasecallbackRight)
 
         # self.Graph.bind_all("<d>", self.move)
+        self.Graph.bind_all("<u>", self.ChangeColor)
+        self.Graph.bind_all("<v>", self.ChangeColor)
         self.LabelAngle = [0.0, 0.0, 0.0]
         self.Odtien = 0
         self.cnt = Graph.RATE
@@ -293,11 +321,10 @@ class Graph(tk.Frame):
                 # if (-1.0 <= ps.values[0] < 1.0) and (-1.0 <= ps.values[1] < 1.0) and (-1.0 <= ps.values[2] < 1.0):
                 inviewvingvolume = True
 
-            if inviewvingvolume:
-                self.Graph.create_polygon(poly[0][0], poly[0][1], poly[1][0], poly[1][1], poly[2][0], poly[2][1],
+            self.Graph.create_polygon(poly[0][0], poly[0][1], poly[1][0], poly[1][1], poly[2][0], poly[2][1],
                                           poly[3][0], poly[3][1], fill=Graph.GRAPH_COLOR)
-                for k in range(len(poly) - 1):
-                    self.Graph.create_line(poly[k][0], poly[k][1], poly[k + 1][0], poly[k + 1][1], fill='white')
+            for k in range(len(poly) - 1):
+                self.Graph.create_line(poly[k][0], poly[k][1], poly[k + 1][0], poly[k + 1][1], fill='white')
                 self.Graph.create_line(poly[len(poly) - 1][0], poly[len(poly) - 1][1], poly[0][0], poly[0][1],
                                        fill='white')
 
@@ -573,24 +600,89 @@ class Graph(tk.Frame):
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[1].values[0], tvs[1].values[1], fill='red')
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[2].values[0], tvs[2].values[1], fill='green')
         self.Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[3].values[0], tvs[3].values[1], fill='blue')
-        '''
-        r = self.InnerTsf * self.dotz
 
-        if (math.fabs(r.values[0]) - 1 <= 0.000001) and (math.fabs(r.values[1]) - 1 <= 0.000001) and (
-                math.fabs(r.values[2]) - 1 <= 0.000001):
-            farba = '#ff{}{}'.format('{:02x}'.format(self.Odtien), '{:02x}'.format(self.Odtien))
-            r = self.Tsf * r
-            ps = self.Projection * r
-            tmp = self.toScreenCords(ps)
-            self.Graph.create_oval(tmp[0] - 5, tmp[1] - 5, tmp[0] + 5, tmp[1] + 5, fill=farba, outline='red')
-        '''
+        self.drawPoints()
+
+        s = 0
+        for v in self.PoygonEdges:
+            v1 = self.PolyGonePeaks[v[0]]
+            v2 = self.PolyGonePeaks[v[1]]
+            r1 = self.innerCordsToOutter(v2)
+            r2 = self.innerCordsToOutter(v1)
+            p1 = self.outterPointToScreen(r1)
+            p2 = self.outterPointToScreen(r2)
+            rayV = r2 - r1
+            epsilon = 0.0000000000000001
+            intersect = True
+            tmin = 0
+            tmax = 1
+            for i in range(3):
+                if math.fabs(rayV.values[i]) < epsilon:
+                    if r1.values[i] < -1 or r1.values[i] > 1:
+                        intersect = False
+                        break
+                else:
+                    ood = 1/ rayV.values[i]
+                    t1 = (-1 - r1.values[i]) * ood
+                    t2 = (1 - r1.values[i]) * ood
+                    if t1 > t2:
+                        t1, t2 = t2, t1
+                    tmin = max(tmin, t1)
+                    tmax = min(tmax, t2)
+                    if tmin > tmax:
+                        intersect = False
+                        break
+            s+=1
+            if intersect:
+                q = myMatrix.Vector3D()
+                p1 = None
+                p2 = None
+                if (math.fabs(r2.values[0]) - 1 <= 0.000001) and (math.fabs(r2.values[1]) - 1 <= 0.000001) and (math.fabs(r2.values[2]) - 1 <= 0.000001):
+                    for i in range(3):
+                        q.values[i] = r1.values[i] + rayV.values[i] * tmin
+                    p1 = self.outterPointToScreen(q)
+                    p2 = self.outterPointToScreen(r2)
+                else:
+                    f = myMatrix.Vector3D()
+                    for i in range(3):
+                        q.values[i] = r1.values[i] + rayV.values[i] * tmin
+                        f.values[i] = r1.values[i] + rayV.values[i] * tmax
+                    p1 = self.outterPointToScreen(q)
+                    p2 = self.outterPointToScreen(f)
+                if s == 5:
+                    self.Graph.create_line(p1[0], p1[1], p2[0], p2[1], fill='red')
+                    self.Graph.create_oval(p1[0] - 5, p1[1] - 5, p1[0] + 5, p1[1] + 5)
+                else:
+                    self.Graph.create_line(p1[0], p1[1], p2[0], p2[1], fill='orange')
+            else:
+                continue
+
+    def drawPoints(self):
+        viewablePoints = []
+        id = 0
         for p in self.Points:
             r = self.innerCordsToOutter(p)
             if (math.fabs(r.values[0]) - 1 <= 0.000001) and (math.fabs(r.values[1]) - 1 <= 0.000001) and (
                     math.fabs(r.values[2]) - 1 <= 0.000001):
-                farba = '#ff{}{}'.format('{:02x}'.format(self.Odtien), '{:02x}'.format(self.Odtien))
-                tmp = self.outterPointToScreen(r)
-                self.Graph.create_oval(tmp[0] - 5, tmp[1] - 5, tmp[0] + 5, tmp[1] + 5, fill='black')
+
+                tmpTest = self.Tsf * r
+                heapq.heappush(viewablePoints, (tmpTest.values[2], id, tmpTest))
+                id += 1
+        while viewablePoints:
+            zakladnyOdtien = [255, 0, 0]
+            r = heapq.heappop(viewablePoints)[2]
+            outlineFarba = '#{}{}{}'.format('{:02x}'.format(zakladnyOdtien[0]),'{:02x}'.format(zakladnyOdtien[1]), '{:02x}'.format(zakladnyOdtien[2]))
+            farba = '#{}{}{}'.format('{:02x}'.format(zakladnyOdtien[0]),'{:02x}'.format(zakladnyOdtien[1]), '{:02x}'.format(zakladnyOdtien[2]))
+
+            if r.values[2] < 0:
+                redColor = min(zakladnyOdtien[0] + 255 * math.fabs(r[2]), 255)
+                greenColor = min(zakladnyOdtien[1] + 255 * math.fabs(r[2]), 255)
+                blueColor = min(zakladnyOdtien[2] + 255 * math.fabs(r[2]), 255)
+                farba = '#{}{}{}'.format('{:02x}'.format(int(redColor)),'{:02x}'.format(int(greenColor)),
+                                         '{:02x}'.format(int(blueColor)))
+            projectedPoint = self.Projection * r
+            tmp = self.toScreenCords(projectedPoint)
+            self.Graph.create_oval(tmp[0] - 5, tmp[1] - 5, tmp[0] + 5, tmp[1] + 5,fill=farba, outline=outlineFarba)
 
     def rotationUpdate(self):
         self.RotationMatX[(1, 1)] = math.cos(math.radians(self.Angles[0]))
@@ -717,10 +809,8 @@ class Graph(tk.Frame):
                         self.previousTmpScale[dim] = round(self.previousTmpScale[dim])
                 self.updateAxisNumberPositions(dim, nasobok, nasobenie=False)
 
-
 vector = myMatrix.Vector(1, 2, 3)
 window = tk.Tk()
 window.title("Skuska")
 graf = Graph(window)
-
 window.mainloop()

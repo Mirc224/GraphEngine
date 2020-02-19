@@ -409,7 +409,6 @@ class Matrix:
 
             return mat
 
-
 '''
 matTest = Matrix([
     [2,-4, 6],
