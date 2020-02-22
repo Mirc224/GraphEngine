@@ -3,7 +3,7 @@ import tkinter as tk
 import myMatrix
 import heapq
 import shapes
-
+import time
 
 class Graph(tk.Frame):
     WIDTH = 640.0
@@ -12,8 +12,8 @@ class Graph(tk.Frame):
     RATE = 2
     SPEED = 3
 
-    ZOOMRATE = 1
-    ZOOMSPEED = 1
+    ZOOMRATE = 2
+    ZOOMSPEED = 3
 
     GRAPH_COLOR = '#eaeaea'
 
@@ -24,6 +24,8 @@ class Graph(tk.Frame):
         self.pack()
         self.__Parent = parent
         # Axes of graph in the middle
+
+        self.__SceneChange = True
         self.__CordsSys = [
             myMatrix.Vector3D(0.0, 0.0, 0.0),  # Origin
             myMatrix.Vector3D(1, 0.0, 0.0),  # X
@@ -125,7 +127,7 @@ class Graph(tk.Frame):
         ]
 
         self.Polygons = [
-            shapes.Polygon(0, 0, 0, 2, -1, 2, 10, 10, 10)
+            shapes.Polygon(0, 0, 0, 2, -1, 2, 15, 15, 15)
         ]
 
         self.PolyGonePeaks = [
@@ -259,6 +261,11 @@ class Graph(tk.Frame):
 
         self.numerifyAxis()
         self.outterTransformationMatrixUpdate()
+        time_st = time.time()
+        time.sleep(1)
+        print(time.time() - time_st)
+        self.update()
+
 
     def updateAxisNumberPositions(self, dim, koeficient, multiply=True):
         if multiply:
@@ -538,22 +545,11 @@ class Graph(tk.Frame):
 
 
     def MakeGraphCube(self):
+        update_start_time = time.time_ns()
         self.drawGraphCubeWall()
         self.drawGraphCubeAxis()
+        print('Make cube time: {} ns'.format((time.time_ns() - update_start_time)))
         # print(poziciaMinusJednaHodnota)
-
-
-    def ChangeColor(self, event):
-        if event.char == 'u':
-            self.Odtien += 1
-            if self.Odtien > 200:
-                self.Odtien = 200
-        if event.char == 'i':
-            self.Odtien -= 1
-            if self.Odtien < 0:
-                self.Odtien = 0
-        self.update()
-
 
     def Move(self, event):
         if event.char == 'a':
@@ -568,28 +564,37 @@ class Graph(tk.Frame):
             self.__InnerTranslation[1] += 0.1
         if event.char == 'v':
             self.__InnerTranslation[1] -= 0.1
-        self.update()
+        #self.update()
 
     def update(self):
-        self.__Graph.delete('all')
+        if self.__SceneChange:
+            self.__Graph.delete('all')
 
-        self.MakeGraphCube()
+            self.MakeGraphCube()
 
-        # Transformovane vektory, najskor osy
-        tvs = []
+            # Transformovane vektory, najskor osy
+            tvs = []
 
-        for v in self.__CordsSys:
-            tvs.append(self.outterPointToScreen(self.innerCordsToOutter(v)))
+            for v in self.__CordsSys:
+                tvs.append(self.outterPointToScreen(self.innerCordsToOutter(v)))
 
-        # Vykreslenie osy
-        self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[1].values[0], tvs[1].values[1], fill='red')
-        self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[2].values[0], tvs[2].values[1], fill='green')
-        self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[3].values[0], tvs[3].values[1], fill='blue')
+            # Vykreslenie osy
+            self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[1].values[0], tvs[1].values[1], fill='red')
+            self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[2].values[0], tvs[2].values[1], fill='green')
+            self.__Graph.create_line(tvs[0].values[0], tvs[0].values[1], tvs[3].values[0], tvs[3].values[1], fill='blue')
 
-        self.drawPoints()
-        self.drawPolygons()
+
+
+            self.drawPoints()
+
+            self.drawPolygons()
+
+            self.__SceneChange = False
+
+        self.__Parent.after(10, self.update)
 
     def drawPolygons(self):
+        update_start_time = time.time_ns()
         for poly in self.Polygons:
             polygonEdges = poly.edges
             polygonPeaks = poly.peaks
@@ -600,6 +605,7 @@ class Graph(tk.Frame):
                 r2 = self.innerCordsToOutter(v2)
                 p1 = self.outterPointToScreen(r1)
                 p2 = self.outterPointToScreen(r2)
+                #intersect_calculation_start = time.time_ns()
                 rayV = r2 - r1
                 epsilon = 0.0000000000000001
                 intersect = True
@@ -621,6 +627,7 @@ class Graph(tk.Frame):
                         if tmin > tmax:
                             intersect = False
                             break
+
                 if intersect:
                     q = myMatrix.Vector3D()
                     p1 = None
@@ -638,10 +645,14 @@ class Graph(tk.Frame):
                         p1 = self.outterPointToScreen(q)
                         p2 = self.outterPointToScreen(f)
                     self.__Graph.create_line(p1[0], p1[1], p2[0], p2[1], fill='red')
+                    #print('Intersect calculation time: {} ns'.format((time.time_ns() - intersect_calculation_start)))
                 else:
+                    #print('Intersect calculation time: {} ns'.format((time.time_ns() - intersect_calculation_start)))
                     continue
+        print('Draw polygons time: {} ms'.format((time.time_ns() - update_start_time)/1000000))
 
     def drawPoints(self):
+        update_start_time = time.time_ns()
         viewablePoints = []
         id = 0
         for p in self.__Points:
@@ -668,6 +679,7 @@ class Graph(tk.Frame):
             projection = self.__Projection * transofmation
             screenCords = self.toScreenCords(projection)
             self.__Graph.create_oval(screenCords[0] - 5, screenCords[1] - 5, screenCords[0] + 5, screenCords[1] + 5, fill=farba, outline=outlineFarba)
+        print('Draw points time: {} ns'.format((time.time_ns() - update_start_time)))
 
     def rotationUpdate(self):
         self.__RotationMatX[(1, 1)] = math.cos(math.radians(self.__Angles[0]))
@@ -696,77 +708,15 @@ class Graph(tk.Frame):
         '''
         # self.__Tsf = self.Scale * self.Rot * self.Tr
         self.__Tsf = self.__Scale * self.__Rot
-        self.update()
-
-
-    def dragcallback(self, event):
-        self.cnt -= 1
-        if self.cnt == 0:
-            self.cnt = Graph.RATE
-            diffX = event.x - self.prevmouseX
-            diffY = event.y - self.prevmouseY
-            # print(diffX, diffY)
-            if not self.lctrl_pressed:
-                self.__Angles[0] += diffY * Graph.SPEED
-                self.__Angles[1] += diffX * Graph.SPEED
-                if self.__Angles[0] >= 360.0:
-                    self.__Angles[0] -= 360.0
-                if self.__Angles[0] < 0.0:
-                    self.__Angles[0] += 360.0
-                if self.__Angles[1] >= 360.0:
-                    self.__Angles[1] -= 360.0
-                if self.__Angles[1] < 0.0:
-                    self.__Angles[1] += 360.0
-
-            else:
-                self.__Angles[2] += diffX * Graph.SPEED
-                if self.__Angles[2] >= 360.0:
-                    self.__Angles[2] -= 360.0
-                if self.__Angles[2] < 0.0:
-                    self.__Angles[2] += 360.0
-
-            self.rotationUpdate()
-            self.outterTransformationMatrixUpdate()
-
-        self.prevmouseX = event.x
-        self.prevmouseY = event.y
-
-
-    def releasecallback(self, event):
-        self.cnt = Graph.RATE
-        self.prevmouseX = 0.0
-        self.prevmouseY = 0.0
-
+        self.__SceneChange = True
+        #self.update()
 
     def innerTransformationMatrixUpdate(self):
         self.__InnerTsf[(0, 3)] = self.__InnerTranslation[0]
         self.__InnerTsf[(1, 3)] = self.__InnerTranslation[1]
         self.__InnerTsf[(2, 3)] = self.__InnerTranslation[2]
-        self.update()
-
-
-    def dragcallbackRight(self, event):
-        diffY = event.y - self.prevmouseYright
-        if diffY < 0 and diffY != 0:
-            self.__InnerTsf[(0, 0)] /= self.__ScaleFactor
-            self.__InnerTsf[(1, 1)] /= self.__ScaleFactor
-            self.__InnerTsf[(2, 2)] /= self.__ScaleFactor
-
-        elif diffY > 0:
-            self.__InnerTsf[(0, 0)] *= self.__ScaleFactor
-            self.__InnerTsf[(1, 1)] *= self.__ScaleFactor
-            self.__InnerTsf[(2, 2)] *= self.__ScaleFactor
-
-        # print(math.fabs(tmpScale * self.__AxisNumbersPosition[0][0][0].values[0] - tmpScale * self.__AxisNumbersPosition[0][1][0].values[0]))
-        self.numerifyAxis()
-        self.innerTransformationMatrixUpdate()
-
-        self.prevmouseYright = event.y
-
-
-    def releasecallbackRight(self, event):
-        self.prevmouseYright = 0.0
-
+        self.__SceneChange = True
+        #self.update()
 
     def numerifyAxis(self):
         for dim in range(3):
@@ -794,7 +744,72 @@ class Graph(tk.Frame):
                         self.previousTmpScale[dim] = round(self.previousTmpScale[dim])
                 self.updateAxisNumberPositions(dim, nasobok, multiply=False)
 
-vector = myMatrix.Vector(1, 2, 3)
+    def dragcallback(self, event):
+        self.cnt -= 1
+        if self.cnt == 0:
+            self.cnt = Graph.RATE
+            diffX = event.x - self.prevmouseX
+            diffY = event.y - self.prevmouseY
+
+            self.__Angles[0] += diffY * Graph.SPEED
+            self.__Angles[1] += diffX * Graph.SPEED
+            if self.__Angles[0] >= 360.0:
+                self.__Angles[0] -= 360.0
+            if self.__Angles[0] < 0.0:
+                self.__Angles[0] += 360.0
+            if self.__Angles[1] >= 360.0:
+                self.__Angles[1] -= 360.0
+            if self.__Angles[1] < 0.0:
+                self.__Angles[1] += 360.0
+            '''
+            else:
+                self.__Angles[2] += diffX * Graph.SPEED
+                if self.__Angles[2] >= 360.0:
+                    self.__Angles[2] -= 360.0
+                if self.__Angles[2] < 0.0:
+                    self.__Angles[2] += 360.0
+            '''
+            self.rotationUpdate()
+            self.outterTransformationMatrixUpdate()
+
+        self.prevmouseX = event.x
+        self.prevmouseY = event.y
+
+
+    def releasecallback(self, event):
+        self.cnt = Graph.RATE
+        self.prevmouseX = 0.0
+        self.prevmouseY = 0.0
+
+
+    def dragcallbackRight(self, event):
+        self.cntRight -= 1
+        if self.cntRight == 0:
+            self.cntRight = self.ZOOMRATE
+            diffY = event.y - self.prevmouseYright
+            if diffY < 0 and diffY != 0:
+                #for i in range(math.fabs(diffY)):
+                self.__InnerTsf[(0, 0)] /= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+                self.__InnerTsf[(1, 1)] /= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+                self.__InnerTsf[(2, 2)] /= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+
+            elif diffY > 0:
+                #for i in range(diffY):
+                self.__InnerTsf[(0, 0)] *= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+                self.__InnerTsf[(1, 1)] *= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+                self.__InnerTsf[(2, 2)] *= math.pow(self.__ScaleFactor, Graph.ZOOMSPEED)
+
+            # print(math.fabs(tmpScale * self.__AxisNumbersPosition[0][0][0].values[0] - tmpScale * self.__AxisNumbersPosition[0][1][0].values[0]))
+            self.numerifyAxis()
+            self.innerTransformationMatrixUpdate()
+
+        self.prevmouseYright = event.y
+
+
+    def releasecallbackRight(self, event):
+        self.cntRight = Graph.ZOOMRATE
+        self.prevmouseYright = 0.0
+
 window = tk.Tk()
 window.title("Skuska")
 graf = Graph(window)
